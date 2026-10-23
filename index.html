@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pumpkin Clicker</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #111;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: white;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+        canvas {
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="gameCanvas" width="900" height="900"></canvas>
+
+<script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    // Scale factor (matching your Java 1.5 scale on a 600x600 base -> 900x900 canvas)
+    const SCALE = 1.5;
+    const BASE_W = 600;
+    const BASE_H = 600;
+
+    let pumpkins = 0;
+    let pumpkinsPerSecond = 0;
+    let pumpkinsPerClick = 1;
+
+    // Ascension requirements
+    const req1 = 5000000;
+    const req2 = 1000000000;
+    const req3 = 50000000000;
+
+    let asc1 = false;
+    let asc2 = false;
+    let gameOver = false;
+    let upgrades = false;
+    let spacePressed = false;
+
+    // Building costs
+    let clickerCost = 15;
+    let farmerCost = 60;
+    let patchCost = 350;
+    let businessCost = 1500;
+    let hauntedCost = 7500;
+    let altarCost = 45000;
+    let templeCost = 300000;
+    let demonCost = 2500000;
+    let overlordCost = 20000000;
+    let godCost = 150000000;
+
+    // Building Production Amounts
+    let clickerAmount = 1;
+    let farmAmount = 1;
+    let patchAmount = 5;
+    let businessAmount = 20;
+    let hauntedAmount = 50;
+    let altarAmount = 100;
+    let templeAmount = 500;
+    let demonAmount = 2500;
+    let overlordAmount = 7500;
+    let godAmount = 50000;
+
+    // Buildings Owned
+    let clickers = 0;
+    let farms = 0;
+    let patches = 0;
+    let businesses = 0;
+    let haunteds = 0;
+    let altars = 0;
+    let temples = 0;
+    let demons = 0;
+    let overlords = 0;
+    let gods = 0;
+
+    let click1Bought = false;
+    let farm1Bought = false;
+    let availableUpgrades = [];
+
+    // Load Images (Assumes images are in the same folder as index.html)
+    const images = {};
+    const imageSources = {
+        background1: "farm.jpg",
+        background2: "nightSky.jpg",
+        background3: "fullMoon.jpg",
+        upgradeBackground: "upgradeBackground.jpg",
+        pumpkinImage: "pumpkin.png"
+    };
+
+    for (let key in imageSources) {
+        images[key] = new Image();
+        images[key].src = imageSources[key];
+    }
+
+    // Game loop timer (1 second intervals)
+    setInterval(() => {
+        step();
+    }, 1000);
+
+    function step() {
+        if (gameOver) return;
+
+        if (asc2 && !asc1) pumpkins += getShownPPS(); // handled via multiplier logic below
+        else if (asc1) pumpkins += getShownPPS();
+        else pumpkins += pumpkinsPerSecond;
+
+        // Correct accumulation logic matching Java
+        if (asc2 && !asc1) pumpkins += 0; // step already adds base, let's keep it clean:
+        
+        updateAvailableUpgrades();
+    }
+
+    // Fix exact step accumulation matching Java's add behavior:
+    function getActualPPSInc() {
+        let pps = pumpkinsPerSecond;
+        if (asc2 && !asc1) return pps * 3;
+        if (asc1) return pps * 2;
+        return pps;
+    }
+
+    // Override step accumulation correctly:
+    setInterval(() => {
+        if (gameOver) return;
+        pumpkins += getActualPPSInc();
+        updateAvailableUpgrades();
+    }, 1000);
+
+    function triggerPumpkinClick() {
+        if (gameOver || upgrades) return;
+
+        let clickVal = pumpkinsPerClick;
+        if (asc2 && !asc1) clickVal *= 3;
+        else if (asc1) clickVal *= 2;
+
+        pumpkins += clickVal;
+    }
+
+    function updateAvailableUpgrades() {
+        availableUpgrades = [];
+        if (clickers >= 5 && !click1Bought) availableUpgrades.push("Clicker1");
+        if (farms >= 5 && !farm1Bought) availableUpgrades.push("Farm1");
+    }
+
+    function getShownPPS() {
+        if (asc2 && !asc1) return pumpkinsPerSecond * 3;
+        if (asc1) return pumpkinsPerSecond * 2;
+        return pumpkinsPerSecond;
+    }
+
+    function getShownPPC() {
+        if (asc2 && !asc1) return pumpkinsPerClick * 3;
+        if (asc1) return pumpkinsPerClick * 2;
+        return pumpkinsPerClick;
+    }
+
+    // Input listeners
+    window.addEventListener("keydown", (e) => {
+        if (e.code === "Space" && !spacePressed) {
+            spacePressed = true;
+            triggerPumpkinClick();
+            e.preventDefault();
+        }
+    });
+
+    window.addEventListener("keyup", (e) => {
+        if (e.code === "Space") {
+            spacePressed = false;
+        }
+    });
+
+    canvas.addEventListener("click", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) / SCALE;
+        const y = (e.clientY - rect.top) / SCALE;
+
+        if (gameOver) return;
+
+        let pumpkinW = 150;
+        let pumpkinH = 150;
+        let pumpkinX = BASE_W / 2 - pumpkinW / 2;
+        let pumpkinY = BASE_H / 2 - pumpkinH / 2;
+
+        // Pumpkin click
+        if (!upgrades && x >= pumpkinX && x <= pumpkinX + pumpkinW && y >= pumpkinY && y <= pumpkinY + pumpkinH) {
+            triggerPumpkinClick();
+        }
+
+        if (!upgrades) {
+            handleBuildings(x, y);
+            // Open Upgrades button
+            if (x >= 450 && x <= 590 && y >= 50 && y <= 100) {
+                upgrades = true;
+            }
+        } else {
+            handleUpgrades(x, y);
+            // Return to Main button
+            if (x >= 200 && x <= 400 && y >= 450 && y <= 500) {
+                upgrades = false;
+            }
+        }
+
+        // Ascensions
+        if (x >= BASE_W / 2 - 140 && x <= BASE_W / 2 + 140 && y >= 50 && y <= 120) {
+            if (pumpkins >= req1 && !asc1) {
+                pumpkins = 0; asc1 = true; pumpkinsPerSecond = 0; pumpkinsPerClick = 1; resetCosts();
+            } else if (pumpkins >= req2 && asc1 && !asc2) {
+                pumpkins = 0; asc2 = true; pumpkinsPerSecond = 0; pumpkinsPerClick = 1; resetCosts();
+            } else if (pumpkins >= req3 && asc2) {
+                gameOver = true;
+            }
+        }
+    });
+
+    function resetCosts() {
+        clickerCost = 15; farmerCost = 50; patchCost = 100; businessCost = 250; hauntedCost = 750;
+        altarCost = 1000; templeCost = 15000; demonCost = 50000; overlordCost = 100000; godCost = 500000;
+        clickers = 0; farms = 0; patches = 0; businesses = 0; haunteds = 0;
+        altars = 0; temples = 0; demons = 0; overlords = 0; gods = 0;
+    }
+
+    function handleBuildings(x, y) {
+        // Left side
+        if (x >= 20 && x <= 140 && y >= 140 && y <= 190 && pumpkins >= clickerCost) {
+            pumpkinsPerClick += clickerAmount; pumpkins -= clickerCost; clickers++;
+            clickerCost = Math.floor(15 * Math.pow(1.3, clickers));
+        } else if (x >= 20 && x <= 140 && y >= 200 && y <= 250 && pumpkins >= farmerCost) {
+            pumpkinsPerSecond += farmAmount; pumpkins -= farmerCost; farms++;
+            farmerCost = Math.floor(60 * Math.pow(1.3, farms));
+        } else if (x >= 20 && x <= 140 && y >= 260 && y <= 310 && pumpkins >= patchCost) {
+            pumpkinsPerSecond += patchAmount; pumpkins -= patchCost; patches++;
+            patchCost = Math.floor(350 * Math.pow(1.3, patches));
+        } else if (x >= 20 && x <= 140 && y >= 320 && y <= 370 && pumpkins >= businessCost) {
+            pumpkinsPerSecond += businessAmount; pumpkins -= businessCost; businesses++;
+            businessCost = Math.floor(1500 * Math.pow(1.3, businesses));
+        } else if (x >= 20 && x <= 140 && y >= 380 && y <= 430 && pumpkins >= hauntedCost) {
+            pumpkinsPerSecond += hauntedAmount; pumpkins -= hauntedCost; haunteds++;
+            hauntedCost = Math.floor(7500 * Math.pow(1.3, haunteds));
+        }
+
+        // Right side
+        let rx = BASE_W - 160;
+        if (x >= rx && x <= rx + 120 && y >= 140 && y <= 190 && pumpkins >= altarCost) {
+            pumpkinsPerSecond += altarAmount; pumpkins -= altarCost; altars++;
+            altarCost = Math.floor(45000 * Math.pow(1.3, altars));
+        } else if (x >= rx && x <= rx + 120 && y >= 200 && y <= 250 && pumpkins >= templeCost) {
+            pumpkinsPerSecond += templeAmount; pumpkins -= templeCost; temples++;
+            templeCost = Math.floor(300000 * Math.pow(1.3, temples));
+        } else if (x >= rx && x <= rx + 120 && y >= 260 && y <= 310 && pumpkins >= demonCost) {
+            pumpkinsPerSecond += demonAmount; pumpkins -= demonCost; demons++;
+            demonCost = Math.floor(2500000 * Math.pow(1.3, demons));
+        } else if (x >= rx && x <= rx + 120 && y >= 320 && y <= 370 && pumpkins >= overlordCost) {
+            pumpkinsPerSecond += overlordAmount; pumpkins -= overlordCost; overlords++;
+            overlordCost = Math.floor(20000000 * Math.pow(1.3, overlords));
+        } else if (x >= rx && x <= rx + 120 && y >= 380 && y <= 430 && pumpkins >= godCost) {
+            pumpkinsPerSecond += godAmount; pumpkins -= godCost; gods++;
+            godCost = Math.floor(150000000 * Math.pow(1.3, gods));
+        }
+        updateAvailableUpgrades();
+    }
+
+    function handleUpgrades(x, y) {
+        let startX = 40;
+        let startY = 50;
+        let boxWidth = 250;
+        let boxHeight = 100;
+
+        for (let i = 0; i < availableUpgrades.length && i < 6; i++) {
+            if (x >= startX && x <= startX + boxWidth && y >= startY && y <= startY + boxHeight) {
+                let upgrade = availableUpgrades[i];
+                if (upgrade === "Clicker1" && pumpkins >= 100) {
+                    pumpkins -= 100;
+                    clickerAmount *= 2;
+                    pumpkinsPerClick = 1 + (clickers * clickerAmount);
+                    click1Bought = true;
+                    availableUpgrades.splice(i, 1);
+                    break;
+                } else if (upgrade === "Farm1" && pumpkins >= 300) {
+                    pumpkins -= 300;
+                    farmAmount *= 2;
+                    recalcPPS();
+                    farm1Bought = true;
+                    availableUpgrades.splice(i, 1);
+                    break;
+                }
+            }
+            startX += boxWidth + 20;
+        }
+    }
+
+    function recalcPPS() {
+        pumpkinsPerSecond = (farms * farmAmount) + (patches * patchAmount) + (businesses * businessAmount) + 
+                            (haunteds * hauntedAmount) + (altars * altarAmount) + (temples * templeAmount) + 
+                            (demons * demonAmount) + (overlords * overlordAmount) + (gods * godAmount);
+    }
+
+    function Convert(value) {
+        if (value >= 1000000000) return (value / 1000000000).toFixed(3) + "bil";
+        if (value >= 1000000) return (value / 1000000).toFixed(3) + "mil";
+        if (value >= 1000) return (value / 1000).toFixed(3) + "k";
+        return value.toString();
+    }
+
+    // Render loop
+    function draw() {
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.scale(SCALE, SCALE);
+
+        if (upgrades) {
+            // Background
+            if (images.upgradeBackground.complete && images.upgradeBackground.naturalWidth !== 0) {
+                ctx.drawImage(images.upgradeBackground, 0, 0, BASE_W, BASE_H);
+            } else {
+                ctx.fillStyle = "#333"; ctx.fillRect(0, 0, BASE_W, BASE_H);
+            }
+
+            // HUD bar
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(0, BASE_H - 80, BASE_W, 80);
+
+            ctx.fillStyle = "white";
+            ctx.font = "bold 18px sans-serif";
+            ctx.fillText("Pumpkins: " + Convert(pumpkins), 20, BASE_H - 50);
+            ctx.font = "16px sans-serif";
+            ctx.fillText("Pumpkins Per Second: " + Convert(getShownPPS()), 20, BASE_H - 30);
+            ctx.fillText("Pumpkins Per Click: " + Convert(getShownPPC()), 20, BASE_H - 10);
+
+            // Back Button
+            ctx.fillStyle = "blue";
+            ctx.fillRect(200, 450, 200, 50);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 30px sans-serif";
+            ctx.fillText("Back", 260, 485);
+
+            if (availableUpgrades.length === 0) {
+                ctx.font = "bold 40px sans-serif";
+                ctx.fillText("You have no available", 100, 200);
+                ctx.fillText("upgrades currently!", 100, 250);
+            } else {
+                let startX = 40;
+                let startY = 50;
+                for (let i = 0; i < availableUpgrades.length && i < 6; i++) {
+                    let upg = availableUpgrades[i];
+                    ctx.fillStyle = "gray";
+                    ctx.fillRect(startX, startY, 250, 100);
+                    ctx.fillStyle = "white";
+                    ctx.font = "bold 22px sans-serif";
+                    ctx.fillText(upg === "Clicker1" ? "Clicky Clickers:" : "Fantastic Farms:", startX + 10, startY + 25);
+                    ctx.font = "16px sans-serif";
+                    ctx.fillText(upg === "Clicker1" ? "Clicker Production x2" : "Farm Production x2", startX + 10, startY + 55);
+                    ctx.fillText(upg === "Clicker1" ? "100 Pumpkins" : "300 Pumpkins", startX + 10, startY + 85);
+                    startX += 270;
+                }
+            }
+        } else {
+            // Main Background
+            let bg = asc2 ? images.background3 : (asc1 ? images.background2 : images.background1);
+            if (bg.complete && bg.naturalWidth !== 0) {
+                ctx.drawImage(bg, 0, 0, BASE_W, BASE_H);
+            } else {
+                ctx.fillStyle = "#222"; ctx.fillRect(0, 0, BASE_W, BASE_H);
+            }
+
+            // Pumpkin
+            let pumpkinW = 150, pumpkinH = 150;
+            let pumpkinX = BASE_W / 2 - pumpkinW / 2;
+            let pumpkinY = BASE_H / 2 - pumpkinH / 2;
+            if (images.pumpkinImage.complete && images.pumpkinImage.naturalWidth !== 0) {
+                ctx.drawImage(images.pumpkinImage, pumpkinX, pumpkinY, pumpkinW, pumpkinH);
+            } else {
+                ctx.fillStyle = "orange";
+                ctx.beginPath(); ctx.arc(pumpkinX + 75, pumpkinY + 75, 75, 0, Math.PI * 2); ctx.fill();
+            }
+
+            // HUD
+            ctx.fillStyle = "rgba(0,0,0,0.6)";
+            ctx.fillRect(0, BASE_H - 80, BASE_W, 80);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 18px sans-serif";
+            ctx.fillText("Pumpkins: " + Convert(pumpkins), 20, BASE_H - 50);
+            ctx.font = "16px sans-serif";
+            ctx.fillText("Pumpkins Per Second: " + Convert(getShownPPS()), 20, BASE_H - 30);
+            ctx.fillText("Pumpkins Per Click: " + Convert(getShownPPC()), 20, BASE_H - 10);
+
+            // Ascension Button
+            ctx.fillStyle = "red";
+            ctx.fillRect(BASE_W / 2 - 140, 50, 280, 70);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 16px sans-serif";
+            ctx.fillText("Bake Pumpkin Pie!", BASE_W / 2 - 70, 75);
+            ctx.font = "bold 10px sans-serif";
+            ctx.fillText("5,000,000 pumpkins required to ascend!", BASE_W / 2 - 115, 95);
+            ctx.fillText("Ascension doubles your PPS and PPC!", BASE_W / 2 - 100, 110);
+
+            // Upgrades Button
+            ctx.fillStyle = "blue";
+            ctx.fillRect(450, 50, 140, 50);
+            ctx.fillStyle = "white";
+            ctx.font = "bold 20px sans-serif";
+            ctx.fillText("Upgrades", 475, 82);
+
+            // Buildings Left
+            const drawBuilding = (name, cost, amt, y, count) => {
+                ctx.fillStyle = "#006400"; ctx.fillRect(20, y, 120, 50);
+                ctx.fillStyle = "black"; ctx.fillRect(140, y, 30, 50);
+                ctx.fillStyle = "white"; ctx.font = "14px sans-serif";
+                ctx.fillText(name + ": " + Convert(cost), 30, y + 20);
+                ctx.fillText("+ " + amt, 30, y + 40);
+                ctx.fillText(count, 150, y + 30);
+            };
+
+            drawBuilding("Clicker", clickerCost, clickerAmount + " PPC", 140, clickers);
+            drawBuilding("Farm", farmerCost, farmAmount + " PPS", 200, farms);
+            drawBuilding("Patch", patchCost, patchAmount + " PPS", 260, patches);
+            drawBuilding("Business", businessCost, businessAmount + " PPS", 320, businesses);
+            drawBuilding("Haunted", hauntedCost, hauntedAmount + " PPS", 380, haunteds);
+
+            // Buildings Right
+            let rx = BASE_W - 160;
+            const drawRightBuilding = (name, cost, amt, y, count) => {
+                ctx.fillStyle = "#006400"; ctx.fillRect(rx, y, 120, 50);
+                ctx.fillStyle = "black"; ctx.fillRect(rx - 30, y, 30, 50);
+                ctx.fillStyle = "white"; ctx.font = "14px sans-serif";
+                ctx.fillText(name + ": " + Convert(cost), rx + 10, y + 20);
+                ctx.fillText("+ " + amt, rx + 10, y + 40);
+                ctx.fillText(count, rx - 20, y + 30);
+            };
+
+            drawRightBuilding("Altar", altarCost, altarAmount + " PPS", 140, altars);
+            drawRightBuilding("Temple", templeCost, templeAmount + " PPS", 200, temples);
+            drawRightBuilding("Demon", demonCost, demonAmount + " PPS", 260, demons);
+            drawRightBuilding("Overlord", overlordCost, overlordAmount + " PPS", 320, overlords);
+            drawRightBuilding("GOD", godCost, godAmount + " PPS", 380, gods);
+
+            if (gameOver) {
+                ctx.fillStyle = "rgba(0, 255, 0, 0.85)";
+                ctx.fillRect(0, 0, BASE_W, BASE_H);
+                ctx.fillStyle = "black";
+                ctx.font = "bold 28px sans-serif";
+                ctx.fillText("Congratulations!", BASE_W / 2 - 110, BASE_H / 2 - 40);
+                ctx.font = "18px sans-serif";
+                ctx.fillText("Thank you for playing Pumpkin Clicker!", BASE_W / 2 - 165, BASE_H / 2);
+                ctx.fillText("Be sure to vote for our awesome game!", BASE_W / 2 - 165, BASE_H / 2 + 40);
+            }
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    requestAnimationFrame(draw);
+</script>
+
+</body>
+</html>
